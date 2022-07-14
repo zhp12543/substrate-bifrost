@@ -1,24 +1,19 @@
 package client
 
 import (
-	"bytes"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 
-	"github.com/zhp12543/substrate-bifrost/expand"
 	"github.com/zhp12543/substrate-bifrost/models"
 	"github.com/zhp12543/substrate-bifrost/utils"
 	"github.com/zhp12543/substrate-crypto/ss58"
 
-	"log"
 	"strings"
 
 	gsrc "github.com/zhp12543/substrate-rpc"
 	gsClient "github.com/zhp12543/substrate-rpc/client"
 	"github.com/zhp12543/substrate-rpc/rpc"
-	"github.com/zhp12543/substrate-rpc/scale"
 	"github.com/zhp12543/substrate-rpc/types"
 	"golang.org/x/crypto/blake2b"
 )
@@ -151,21 +146,9 @@ func (c *Client) GetBlockByHash(bhash types.Hash) (*models.BlockResponse, error)
 		Height:     int64(sb.Block.Header.Number),
 		ParentHash: sb.Block.Header.ParentHash.Hex(),
 		BlockHash:  sb.Block.Header.ExtrinsicsRoot.Hex(),
-		// Timestamp: idk what should be here ,
+		Extrinsic:  sb.Block.Extrinsics,
 	}
 
-	if len(br.Extrinsic) > 0 {
-		//TODO: parse em
-		// err = c.parseExtrinsicByDecode(br.Extrinsic, br)
-		// if err != nil {
-		// 	return nil, err
-		// }
-
-		// err = c.parseExtrinsicByStorage(blockHash, br)
-		// if err != nil {
-		// 	return nil, err
-		// }
-	}
 	return br, nil
 }
 
@@ -173,251 +156,6 @@ type parseBlockExtrinsicParams struct {
 	from, to, sig, era, txid, fee string
 	nonce                         int64
 	extrinsicIdx, length          int
-}
-
-/*
-解析外部交易extrinsic
-*/
-func (c *Client) parseExtrinsicByDecode(extrinsics []string, blockResp *models.BlockResponse) error {
-	var (
-		params    []parseBlockExtrinsicParams
-		timestamp int64
-		//idx int
-	)
-	defer func() {
-		if err := recover(); err != nil {
-			blockResp.Timestamp = timestamp
-			blockResp.Extrinsic = []*models.ExtrinsicResponse{}
-			log.Printf("parse %d block extrinsic error,Err=[%v]", blockResp.Height, err)
-		}
-	}()
-
-	for i, extrinsic := range extrinsics {
-		extrinsic = utils.Remove0X(extrinsic)
-		data, err := hex.DecodeString(extrinsic)
-		if err != nil {
-			return fmt.Errorf("hex.decode extrinsic error: %v", err)
-		}
-		decoder := scale.NewDecoder(bytes.NewReader(data))
-		ed, err := expand.NewExtrinsicDecoder(c.Meta)
-		if err != nil {
-			return fmt.Errorf("new extrinsic decode error: %v", err)
-		}
-		err = ed.ProcessExtrinsicDecoder(*decoder)
-		if err != nil {
-			return fmt.Errorf("decode extrinsic error: %v", err)
-		}
-		var resp models.ExtrinsicDecodeResponse
-		d, _ := json.Marshal(ed.Value)
-		if len(d) == 0 {
-			return errors.New("unknown extrinsic decode response")
-		}
-		err = json.Unmarshal(d, &resp)
-		if err != nil {
-			return fmt.Errorf("json unmarshal extrinsic decode error: %v", err)
-		}
-
-		switch resp.CallModule {
-		case "Timestamp":
-			for _, param := range resp.Params {
-				if param.Name == "now" {
-					timestamp = int64(param.Value.(float64))
-				}
-			}
-		case "Balances":
-			if resp.CallModuleFunction == "transfer" || resp.CallModuleFunction == "transfer_keep_alive" {
-				blockData := parseBlockExtrinsicParams{}
-				blockData.from, _ = ss58.EncodeByPubHex(resp.AccountId, c.prefix)
-				blockData.era = resp.Era
-				blockData.sig = resp.Signature
-				blockData.nonce = resp.Nonce
-				blockData.extrinsicIdx = i
-				blockData.fee, err = c.GetPartialFee(extrinsic, blockResp.ParentHash)
-
-				blockData.txid = c.createTxHash(extrinsic)
-				blockData.length = resp.Length
-				for _, param := range resp.Params {
-					if param.Name == "dest" {
-						blockData.to, _ = ss58.EncodeByPubHex(param.Value.(string), c.prefix)
-					}
-				}
-				params = append(params, blockData)
-			}
-
-		case "Utility":
-			if resp.CallModuleFunction == "batch" {
-				for _, param := range resp.Params {
-					if param.Name == "calls" {
-						switch param.Value.(type) {
-						case []interface{}:
-
-							d, _ := json.Marshal(param.Value)
-							var values []models.UtilityParamsValue
-							err = json.Unmarshal(d, &values)
-							if err != nil {
-								continue
-							}
-
-							for _, value := range values {
-								if value.CallModule == "Balances" {
-									if value.CallFunction == "transfer" || value.CallFunction == "transfer_keep_alive" {
-										if len(value.CallArgs) > 0 {
-											for _, arg := range value.CallArgs {
-												if arg.Name == "dest" {
-													blockData := parseBlockExtrinsicParams{}
-													blockData.from, _ = ss58.EncodeByPubHex(resp.AccountId, c.prefix)
-													blockData.era = resp.Era
-													blockData.sig = resp.Signature
-													blockData.nonce = resp.Nonce
-													blockData.extrinsicIdx = i
-													blockData.fee, _ = c.GetPartialFee(extrinsic, blockResp.ParentHash)
-													blockData.txid = c.createTxHash(extrinsic)
-													blockData.to, _ = ss58.EncodeByPubHex(arg.ValueRaw, c.prefix)
-													params = append(params, blockData)
-												}
-											}
-										}
-									}
-								}
-							}
-						default:
-							continue
-						}
-					}
-				}
-			}
-		default:
-			//todo  add another call_module 币种不同可能使用的call_module不一样
-			continue
-		}
-	}
-	blockResp.Timestamp = timestamp
-	//解析params
-	if len(params) == 0 {
-		blockResp.Extrinsic = []*models.ExtrinsicResponse{}
-		return nil
-	}
-
-	blockResp.Extrinsic = make([]*models.ExtrinsicResponse, len(params))
-	for idx, param := range params {
-		e := new(models.ExtrinsicResponse)
-		e.Signature = param.sig
-		e.FromAddress = param.from
-		e.ToAddress = param.to
-		e.Nonce = param.nonce
-		e.Era = param.era
-		e.Fee = param.fee
-		e.ExtrinsicIndex = param.extrinsicIdx
-		//e.Txid = txid
-		e.Txid = param.txid
-		e.ExtrinsicLength = param.length
-		blockResp.Extrinsic[idx] = e
-
-	}
-	//utils.CheckStructData(blockResp)
-	return nil
-}
-
-/*
-解析当前区块的System.event
-*/
-func (c *Client) parseExtrinsicByStorage(blockHash string, blockResp *models.BlockResponse) error {
-	var (
-		storage types.StorageKey
-		err     error
-	)
-	defer func() {
-		if err1 := recover(); err1 != nil {
-			err = fmt.Errorf("panic decode event: %v", err1)
-		}
-	}()
-	if len(blockResp.Extrinsic) <= 0 {
-		//不包含交易就不处理了
-		return nil
-	}
-	// 1. 先创建System.event的storageKey
-	storage, err = types.CreateStorageKey(c.Meta, "System", "Events", nil, nil)
-	if err != nil {
-		return fmt.Errorf("create storage key error: %v", err)
-	}
-	key := storage.Hex()
-	var result interface{}
-	/*
-		根据storageKey以及blockHash获取当前区块的event信息
-	*/
-	err = c.C.Client.Call(&result, "state_getStorageAt", key, blockHash)
-	if err != nil {
-		return fmt.Errorf("get storage data error: %v", err)
-	}
-	//解析event信息
-	ier, err := expand.DecodeEventRecords(c.Meta, result.(string), c.ChainName)
-	if err != nil {
-		return fmt.Errorf("decode event data error: %v", err)
-	}
-	//d,_:=json.Marshal(ier)
-	//fmt.Println(string(d))
-	var res []models.EventResult
-	failedMap := make(map[int]bool)
-	if len(ier.GetBalancesTransfer()) > 0 {
-		//有失败的交易
-		for _, failed := range ier.GetSystemExtrinsicFailed() {
-			if failed.Phase.IsApplyExtrinsic {
-				extrinsicIdx := failed.Phase.AsApplyExtrinsic
-				//记录到失败的map中
-				failedMap[int(extrinsicIdx)] = true
-			}
-		}
-
-		for _, ebt := range ier.GetBalancesTransfer() {
-
-			if !ebt.Phase.IsApplyExtrinsic {
-				continue
-			}
-			extrinsicIdx := int(ebt.Phase.AsApplyExtrinsic)
-			var r models.EventResult
-			r.ExtrinsicIdx = extrinsicIdx
-			fromHex := hex.EncodeToString(ebt.From[:])
-			r.From, err = ss58.EncodeByPubHex(fromHex, c.prefix)
-			if err != nil {
-				r.From = ""
-				continue
-			}
-			toHex := hex.EncodeToString(ebt.To[:])
-
-			r.To, err = ss58.EncodeByPubHex(toHex, c.prefix)
-			if err != nil {
-				r.To = ""
-				continue
-			}
-			r.Amount = ebt.Value.String()
-			//r.Weight = c.getWeight(&events, r.ExtrinsicIdx)
-			res = append(res, r)
-		}
-	}
-	for _, e := range blockResp.Extrinsic {
-		e.Status = "fail"
-		e.Type = "transfer"
-		if len(res) > 0 {
-			for _, r := range res {
-				if e.ExtrinsicIndex == r.ExtrinsicIdx {
-					if e.ToAddress == r.To {
-						if failedMap[e.ExtrinsicIndex] {
-							e.Status = "fail"
-						} else {
-							e.Status = "success"
-						}
-						e.Type = "transfer"
-						e.Amount = r.Amount
-						e.ToAddress = r.To
-						//计算手续费
-						//e.Fee = c.calcFee(&events, e.ExtrinsicIndex)
-					}
-				}
-			}
-		}
-	}
-
-	return nil
 }
 
 /*
