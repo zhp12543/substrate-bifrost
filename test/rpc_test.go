@@ -3,9 +3,9 @@ package test
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/zhp12543/substrate-bifrost/client"
-	"github.com/zhp12543/substrate-crypto/ss58"
 	"testing"
+
+	"github.com/zhp12543/substrate-bifrost/client"
 )
 
 func Test_GetBlockByNumber(t *testing.T) {
@@ -14,11 +14,12 @@ func Test_GetBlockByNumber(t *testing.T) {
 		t.Fatal(err)
 	}
 	c.SetPrefix(ss58.DataHighwayPrefix)
+	// c.SetPrefix(ss58.KsmPrefix)
 	//expand.SetSerDeOptions(false)
 	/*
 		Ksm: 7834050
 	*/
-	resp, err := c.GetBlockByNumber(7467638)
+	resp, err := c.GetBlockByNumber(92000)
 	if err != nil {
 		t.Fatal(err)
 	}
