@@ -3,23 +3,24 @@ package test
 import (
 	"encoding/json"
 	"fmt"
-	"testing"
-
 	"github.com/zhp12543/substrate-bifrost/client"
+	"github.com/zhp12543/substrate-crypto/ss58"
+	"testing"
 )
 
 func Test_GetBlockByNumber(t *testing.T) {
-	c, err := client.New("wss://tanganika.datahighway.com")
+	c, err := client.New("wss://rpc.polkadot.io")
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	c.SetPrefix(ss58.DataHighwayPrefix)
 	// c.SetPrefix(ss58.KsmPrefix)
 	//expand.SetSerDeOptions(false)
 	/*
 		Ksm: 7834050
 	*/
-	resp, err := c.GetBlockByNumber(92000)
+	resp, err := c.GetBlockByNumber(7467638)
 	if err != nil {
 		t.Fatal(err)
 	}
