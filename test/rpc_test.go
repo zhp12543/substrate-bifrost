@@ -13,7 +13,9 @@ func Test_GetBlockByNumber(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	c.SetPrefix(ss58.KsmPrefix)
+
+	c.SetPrefix(ss58.DataHighwayPrefix)
+	// c.SetPrefix(ss58.KsmPrefix)
 	//expand.SetSerDeOptions(false)
 	/*
 		Ksm: 7834050
@@ -28,13 +30,14 @@ func Test_GetBlockByNumber(t *testing.T) {
 }
 
 func Test_GetAccountInfo(t *testing.T) {
-	url := "wss://kusama-rpc.polkadot.io" // wss://kusama-rpc.polkadot.io
-	address := "DXuShaYiV3gqYspg7mzdDmweS9p79Z9u3wEY9FH3rHaj6yN"
+	url := "wss://tanganika.datahighway.com" // wss://kusama-rpc.polkadot.io
+	address := "4Kwk17CyU6wi5rHia53r6hrdNyz7THs1EAuca9PbAQRC4siT"
 
 	c, err := client.New(url)
 	if err != nil {
 		t.Fatal(err)
 	}
+        c.SetPrefix(ss58.DataHighwayPrefix)
 	// 000000000000000001000000000000000047ab56020000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 	ai, err := c.GetAccountInfo(address)
 	if err != nil {
@@ -46,7 +49,7 @@ func Test_GetAccountInfo(t *testing.T) {
 }
 
 func Test_GetBlockExtrinsic(t *testing.T) {
-	url := "wss://kusama-rpc.polkadot.io" // wss://kusama-rpc.polkadot.io
+	url := "wss://tanganika.datahighway.com" // wss://kusama-rpc.polkadot.io
 	c, err := client.New(url)
 	if err != nil {
 		t.Fatal(err)

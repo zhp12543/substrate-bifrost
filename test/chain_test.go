@@ -17,7 +17,7 @@ import (
 
 */
 func Test_Chain(t *testing.T) {
-	c, err := client.New("wss://rpc.polkadot.io")
+	c, err := client.New("wss://tanganika.datahighway.com")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -54,7 +54,7 @@ func Test_Chain(t *testing.T) {
 }
 
 func Test_Chain2(t *testing.T) {
-	c, err := client.New("wss://rpc.polkadot.io")
+	c, err := client.New("wss://tanganika.datahighway.com")
 	if err != nil {
 		t.Fatal(err)
 	}

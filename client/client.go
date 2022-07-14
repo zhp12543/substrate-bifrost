@@ -450,7 +450,7 @@ func (c *Client) GetAccountInfo(address string) (*types.AccountInfo, error) {
 	if err != nil {
 		return nil, fmt.Errorf("ss58 decode address error: %v", err)
 	}
-	storage, err = types.CreateStorageKey(c.Meta, "System", "Account", pub, nil)
+	storage, err = types.CreateStorageKey(c.Meta, "System", "Account", pub)
 	if err != nil {
 		return nil, fmt.Errorf("create System.Account storage error: %v", err)
 	}
