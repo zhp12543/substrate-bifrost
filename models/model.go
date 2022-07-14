@@ -1,5 +1,7 @@
 package models
 
+import "github.com/zhp12543/substrate-rpc/types"
+
 type Bytes []byte
 type SignedBlock struct {
 	Block         Block `json:"block"`
@@ -20,11 +22,10 @@ type Header struct {
 }
 
 type BlockResponse struct {
-	Height     int64                `json:"height"`
-	ParentHash string               `json:"parent_hash"`
-	BlockHash  string               `json:"block_hash"`
-	Timestamp  int64                `json:"timestamp"`
-	Extrinsic  []*ExtrinsicResponse `json:"extrinsic"`
+	Height     int64             `json:"height"`
+	ParentHash string            `json:"parent_hash"`
+	BlockHash  string            `json:"block_hash"`
+	Extrinsic  []types.Extrinsic `json:"extrinsic"`
 }
 
 type ExtrinsicResponse struct {
