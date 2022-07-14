@@ -22,7 +22,7 @@ func Test_ParseMetadataV13(t *testing.T) {
 }
 
 func Test_ParseKsmV13(t *testing.T) {
-	c, err := gsrc.NewSubstrateAPI("wss://kusama-rpc.polkadot.io")
+	c, err := gsrc.NewSubstrateAPI("wss://tanganika.datahighway.com")
 	if err != nil {
 		t.Fatal(err)
 	}
