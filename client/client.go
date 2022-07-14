@@ -6,14 +6,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-
 	"github.com/zhp12543/substrate-bifrost/expand"
 	"github.com/zhp12543/substrate-bifrost/models"
 	"github.com/zhp12543/substrate-bifrost/utils"
 	"github.com/zhp12543/substrate-crypto/ss58"
-
-	"log"
-	"strings"
 
 	gsrc "github.com/zhp12543/substrate-rpc"
 	gsClient "github.com/zhp12543/substrate-rpc/client"
@@ -21,6 +17,9 @@ import (
 	"github.com/zhp12543/substrate-rpc/scale"
 	"github.com/zhp12543/substrate-rpc/types"
 	"golang.org/x/crypto/blake2b"
+	"log"
+	"strconv"
+	"strings"
 )
 
 type Client struct {
@@ -129,44 +128,44 @@ func (c *Client) GetBlockByNumber(height int64) (*models.BlockResponse, error) {
 	if err != nil {
 		return nil, fmt.Errorf("get block hash error:%v,height:%d", err, height)
 	}
+	blockHash := hash.Hex()
 
-	return c.GetBlockByHash(hash)
+	return c.GetBlockByHash(blockHash)
 }
 
 /*
 根据blockHash解析block，返回block是否包含交易
 */
-func (c *Client) GetBlockByHash(bhash types.Hash) (*models.BlockResponse, error) {
-	err := c.checkRuntimeVersion()
+func (c *Client) GetBlockByHash(blockHash string) (*models.BlockResponse, error) {
+	var (
+		block *models.SignedBlock
+		err   error
+	)
+	err = c.checkRuntimeVersion()
 	if err != nil {
 		return nil, err
 	}
-
-	sb, err := c.C.RPC.Chain.GetBlock(bhash)
+	err = c.C.Client.Call(&block, "chain_getBlock", blockHash)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("get block error: %v", err)
 	}
+	blockResp := new(models.BlockResponse)
+	number, _ := strconv.ParseInt(utils.RemoveHex0x(block.Block.Header.Number), 16, 64)
+	blockResp.Height = number
+	blockResp.ParentHash = block.Block.Header.ParentHash
+	blockResp.BlockHash = blockHash
+	if len(block.Block.Extrinsics) > 0 {
+		err = c.parseExtrinsicByDecode(block.Block.Extrinsics, blockResp)
+		if err != nil {
+			return nil, err
+		}
 
-	br := &models.BlockResponse{
-		Height:     int64(sb.Block.Header.Number),
-		ParentHash: sb.Block.Header.ParentHash.Hex(),
-		BlockHash:  sb.Block.Header.ExtrinsicsRoot.Hex(),
-		// Timestamp: idk what should be here ,
+		err = c.parseExtrinsicByStorage(blockHash, blockResp)
+		if err != nil {
+			return nil, err
+		}
 	}
-
-	if len(br.Extrinsic) > 0 {
-		//TODO: parse em
-		// err = c.parseExtrinsicByDecode(br.Extrinsic, br)
-		// if err != nil {
-		// 	return nil, err
-		// }
-
-		// err = c.parseExtrinsicByStorage(blockHash, br)
-		// if err != nil {
-		// 	return nil, err
-		// }
-	}
-	return br, nil
+	return blockResp, nil
 }
 
 type parseBlockExtrinsicParams struct {
